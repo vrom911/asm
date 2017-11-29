@@ -1,19 +1,38 @@
-section .data
-    msg db      "hello, world!"
-    filename equ "input.txt"
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Macros
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; Implements the write system call
+%macro putStr 1
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, %1
+    mov     rdx, %1Len
+    syscall
+%endmacro
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Data
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+section .data
+    msg      db  "hello, world!", 0xA, 0xD
+    msgLen   equ $ - msg
+    filename db  "input.txt"
+
+;; Errors
     exist_err db "File doesn't exist"
-    exist_err_len equ $ - exist_err
+    exist_len equ $-exist_err
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Main
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 section .text
     global _start
 
 _start:
-    mov     rax, 1
-    mov     rdi, 1
-    mov     rsi, msg
-    mov     rdx, 13
-    syscall
+    putStr msg
     mov    rax, 60
     mov    rdi, 0
     syscall
