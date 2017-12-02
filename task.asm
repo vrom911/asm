@@ -58,13 +58,23 @@
 ; Rewrite original with the xSort array
 %macro rewriteArr 1
     mov r8, 0
-    sub r9, 256
   looprewrite%1:
     mov rbx, [%1Sort + r8]
     mov [%1 + r8], rbx
     add r8, 8
     cmp r8, [size256]
     jl looprewrite%1
+%endmacro
+
+; Fill the sort array
+%macro fillSortArr 1
+    mov r8, 0
+  loopfill%1:
+    mov rbx, [%1 + r8]
+    mov [%1Sort + r8], rbx
+    add r8, 8
+    cmp r8, [size256]
+    jl loopfill%1
 %endmacro
 
 ; Compare two elements of array at index i and j return the result at r8
@@ -107,6 +117,9 @@ section .bss
   size     resb 8
   size256  resb 8
   mid      resb 8
+  h        resb 8
+  seqs     resb 8
+  halfseqs resb 8
   keys     resb 128000 ; 256 * 500
   vals     resb 128000
   keysSort resb 128000 ; 256 * 500
@@ -122,13 +135,13 @@ section .text
     global _start
 
 _start:
-    call   playWithFile
+    call playWithFile
     call sorting
     putStrLen keysSort, 128000
     putStr newline
     putStrLen valsSort, 128000
     putStr newline
-    call   exit
+    call exit
 
 playWithFile:
     ; open input.txt file
@@ -194,7 +207,7 @@ printToKeys:
 
 continuePrintWord:
     ; remove the nextWord for the next one
-    mov r8, 257
+    mov r8, 256
 loop:
     mov [nextWord + r8], byte 0
     dec r8
@@ -229,31 +242,39 @@ exit:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 sorting:
-; find the middle of the array
-; int mid = n / 2; 
-    mov rax, [size]
-    divide mid, 2
-    
-; if (n % 2 == 1)
-;     mid++;
-    cmp edx, 0
-    je h
-    mov rax, [mid]
-    add rax, 1
-    mov [mid], rax
+; DIRTY HACK
+; for (int i = 0; i < n; i++) c[i] = a[i];
+    fillSortArr keys
+    fillSortArr vals
 
-h:
-    mov  rax, [mid]
-    imul rax, 256
-    mov [mid], rax
     ; int h = 1; 
     ; rax == h
     mov  rax, 256
+    mov  [h], rax
     
 ; while (h < n)
-cmp rax, [size256]
-jge afterWhileH_l_N
 whileH_l_N:
+    cmp rax, [size256]
+    jge afterWhileH_l_N
+    ; int numberOfSequences = n / h;
+    mov rax, [size256]
+    divide seqs, [h]
+    ; if (n % h != 0) numberOfSequences++;
+    cmp edx, 0
+    je half
+    mov r9, [seqs]
+    inc r9
+    mov [seqs], r9
+  half:
+    ; int halfOfSequences = numberOfSequences / 2;
+    mov rax, [seqs]
+    divide halfseqs, 2 
+    ; int mid = halfOfSequences * h
+    mov rax, [halfseqs]
+    mov r9, [h]
+    imul rax, r9
+    mov [mid], rax
+
     ; step = h;
     ; int i = 0;   // index of the first path
     ; int j = mid; // index of the second path
@@ -262,19 +283,23 @@ whileH_l_N:
     ; r13 == i
     ; r14 == j
     ; r15 == k
-    mov r12, rax
+    mov r12, [h]
     mov r13, 0
     mov r14, [mid]
     mov r15, 0
 
-    cmp r12, [mid]
-    jg afterWhileSTEP_le_MID
+    ; while (step <= mid)
     whileSTEP_le_MID:
+        cmp r12, [mid]
+        jg afterWhileSTEP_le_MID
         ; while not at the end of the path
         ; fill the next element with the lowest of the two we have
         whileComplicated:
             ; (i < step)
             cmp r13, r12
+            jge afterWhileComplicated
+            ; (i < mid)
+            cmp r13, [mid]
             jge afterWhileComplicated
             ; (j < n)
             cmp r14, [size256]
@@ -304,50 +329,59 @@ whileH_l_N:
         afterWhileComplicated:
             ; if the second path is finished earlier than the first
             ; rewrite all the remains from the first
-            ; while (i < step) { c[k] = a[i]; i++; k++; }
-            cmp r13, r12
-            jge afterWhileI_l_STEP
-            whileI_l_STEP:
+            ; while (i < step && i < mid) { c[k] = a[i]; i++; k++; }
+            whileI_l_STEPandMID:
+                cmp r13, r12
+                jge afterWhileI_l_STEPandMID
+                cmp r13, [mid]
+                jge afterWhileI_l_STEPandMID
+
                 writeTo keys, r13, r15, keysI_l_STEP
                 writeTo vals, r13, r15, valsI_l_STEP
+
                 add r13, 256
                 add r15, 256
-                cmp r13, r12
-                jl whileI_l_STEP
-            afterWhileI_l_STEP:
+                jmp whileI_l_STEPandMID
+            afterWhileI_l_STEPandMID:
+
             ; if the first one is finished earlier that the second one
             ; rewrite all the remains from the second
             ; while ((j < (mid + step)) && (j<n)) { c[k] = a[j]; j++; k++; }
             whileSecond:
-            mov rbx, [mid]
-            add rbx, r12
-            cmp r14, rbx
-            jge afterWhileSecond
-            cmp r14, [size256]
-            jge afterWhileSecond
-            writeTo keys, r14, r15, keysSecond
-            writeTo vals, r14, r15, valsSecond
-            add r14, 256
-            add r15, 256
-            jmp whileSecond
+                mov rbx, [mid]
+                add rbx, r12
+                cmp r14, rbx
+                jge afterWhileSecond
+                cmp r14, [size256]
+                jge afterWhileSecond
 
+                writeTo keys, r14, r15, keysSecond
+                writeTo vals, r14, r15, valsSecond
+
+                add r14, 256
+                add r15, 256
+                jmp whileSecond
             afterWhileSecond:
+
             ; move to the next step
             ; step = step + h;
-            add r12, rax 
+            mov rax, [h]
+            add r12, rax
          
+      jmp whileSTEP_le_MID
 
-    cmp r12, [mid]
-    jle whileSTEP_le_MID
     afterWhileSTEP_le_MID:
+
     ; h = h * 2;
-    imul rax, 2 
+    mov rax, [h]
+    imul rax, 2
+    mov [h], rax
     ; move temp sorted version to the original one:
     ; for (i = 0; i<n; i++) a[i] = c[i];
     rewriteArr keys
     rewriteArr vals
 
-    cmp rax, [size256]
-    jl whileH_l_N
+    mov rax, [h]
+    jmp whileH_l_N
 afterWhileH_l_N :
     ret
