@@ -28,19 +28,65 @@
 
 %macro debugReg 1
     mov [regval], %1
-    putStrLen regval, 1
+    putStrLen regval, 8
     putStr newline
 %endmacro
 
 ; Add the word to the array of keys or values
 %macro printTo 1
     mov r11, 0
-loop%1:
+  loop%1:
     mov bl, byte [nextWord + r11]
     mov [%1 + r10 + r11], bl
     add r11, 1
-    cmp r11, 257
-    jnz loop%1
+    cmp r11, 256
+    jl loop%1
+%endmacro
+
+; Rewrite one cell to another array at index `n`.
+; `writeTo keys 1 2` will put keys[1] into keysSort[2]
+%macro writeTo 4
+    mov r8, 0
+  loopwrite%1%2%3%4:
+    mov bl, byte [%1 + %2 + r8]
+    mov [%1Sort + %3 + r8], bl
+    add r8, 1
+    cmp r8, 256
+    jl loopwrite%1%2%3%4
+%endmacro
+
+; Rewrite original with the xSort array
+%macro rewriteArr 1
+    mov r8, 0
+    sub r9, 256
+  looprewrite%1:
+    mov rbx, [%1Sort + r8]
+    mov [%1 + r8], rbx
+    add r8, 8
+    cmp r8, [size256]
+    jl looprewrite%1
+%endmacro
+
+; Compare two elements of array at index i and j return the result at r8
+%macro cmpKeys 2
+    mov r8, 0
+  loopCmp%1%2:
+    mov bl, byte [keys + %1 + r8]
+    mov dl, byte [keys + %2 + r8]
+    cmp bl, dl
+    jne endLoopCmp%1%2
+    inc r8
+    cmp r8, 256
+    jl loopCmp%1%2
+  endLoopCmp%1%2:
+%endmacro
+
+%macro divide 2
+    mov    rdx, rax
+    shr    rdx, 32
+    mov    ecx, %2
+    div    ecx
+    mov    [%1], rax
 %endmacro
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -58,10 +104,15 @@ section .data
 
 section .bss
   fd_in    resb 8
+  size     resb 8
+  size256  resb 8
+  mid      resb 8
   keys     resb 128000 ; 256 * 500
   vals     resb 128000
+  keysSort resb 128000 ; 256 * 500
+  valsSort resb 128000
   nextWord resb 257
-  regval   resb 1
+  regval   resb 8
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Main
@@ -72,9 +123,11 @@ section .text
 
 _start:
     call   playWithFile
-    putStrLen keys, 128000
+    call sorting
+    putStrLen keysSort, 128000
     putStr newline
-    putStrLen vals, 128000
+    putStrLen valsSort, 128000
+    putStr newline
     call   exit
 
 playWithFile:
@@ -150,6 +203,11 @@ loop:
     jmp readSymb
 
 closeFile:
+    ; put size of array into size variable
+    mov [size256], r10
+    mov rax, r10
+    divide size, 256 
+
     ; close the file
     mov    rax, 3        ; system call number (close file)
     mov    rdi, [fd_in]  ; file descriptor
@@ -162,6 +220,134 @@ print_not_exist:
     call   exit
 
 exit:
-    mov    rax, 60	; system call number (sys_write)
+    mov    rax, 60  ; system call number (sys_write)
     mov    rdi, 0   ; exit code
     syscall
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Merge Sort
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+sorting:
+; find the middle of the array
+; int mid = n / 2; 
+    mov rax, [size]
+    divide mid, 2
+    
+; if (n % 2 == 1)
+;     mid++;
+    cmp edx, 0
+    je h
+    mov rax, [mid]
+    add rax, 1
+    mov [mid], rax
+
+h:
+    mov  rax, [mid]
+    imul rax, 256
+    mov [mid], rax
+    ; int h = 1; 
+    ; rax == h
+    mov  rax, 256
+    
+; while (h < n)
+cmp rax, [size256]
+jge afterWhileH_l_N
+whileH_l_N:
+    ; step = h;
+    ; int i = 0;   // index of the first path
+    ; int j = mid; // index of the second path
+    ; int k = 0;   // index of the element of the result array
+    ; r12 == step
+    ; r13 == i
+    ; r14 == j
+    ; r15 == k
+    mov r12, rax
+    mov r13, 0
+    mov r14, [mid]
+    mov r15, 0
+
+    cmp r12, [mid]
+    jg afterWhileSTEP_le_MID
+    whileSTEP_le_MID:
+        ; while not at the end of the path
+        ; fill the next element with the lowest of the two we have
+        whileComplicated:
+            ; (i < step)
+            cmp r13, r12
+            jge afterWhileComplicated
+            ; (j < n)
+            cmp r14, [size256]
+            jge afterWhileComplicated
+            ; (j < (mid + step))
+            mov rbx, [mid]
+            add rbx, r12
+            cmp r14, rbx
+            jge afterWhileComplicated
+            ; if (a[i] < a[j])  
+            ; { c[k] = a[i]; i++; k++; }
+            ; else { c[k] = a[j]; j++; k++; } 
+            cmpKeys r13, r14
+            jl keyI_l_J
+                writeTo keys, r14, r15, keysI_g_J
+                writeTo vals, r14, r15, valsI_g_J
+                add r14, 256
+            jmp incK
+            keyI_l_J:
+                writeTo keys, r13, r15, keysI_l_J
+                writeTo vals, r13, r15, valsI_l_J
+                add r13, 256
+            incK:
+                add r15, 256
+            jmp whileComplicated
+
+        afterWhileComplicated:
+            ; if the second path is finished earlier than the first
+            ; rewrite all the remains from the first
+            ; while (i < step) { c[k] = a[i]; i++; k++; }
+            cmp r13, r12
+            jge afterWhileI_l_STEP
+            whileI_l_STEP:
+                writeTo keys, r13, r15, keysI_l_STEP
+                writeTo vals, r13, r15, valsI_l_STEP
+                add r13, 256
+                add r15, 256
+                cmp r13, r12
+                jl whileI_l_STEP
+            afterWhileI_l_STEP:
+            ; if the first one is finished earlier that the second one
+            ; rewrite all the remains from the second
+            ; while ((j < (mid + step)) && (j<n)) { c[k] = a[j]; j++; k++; }
+            whileSecond:
+            mov rbx, [mid]
+            add rbx, r12
+            cmp r14, rbx
+            jge afterWhileSecond
+            cmp r14, [size256]
+            jge afterWhileSecond
+            writeTo keys, r14, r15, keysSecond
+            writeTo vals, r14, r15, valsSecond
+            add r14, 256
+            add r15, 256
+            jmp whileSecond
+
+            afterWhileSecond:
+            ; move to the next step
+            ; step = step + h;
+            add r12, rax 
+         
+
+    cmp r12, [mid]
+    jle whileSTEP_le_MID
+    afterWhileSTEP_le_MID:
+    ; h = h * 2;
+    imul rax, 2 
+    ; move temp sorted version to the original one:
+    ; for (i = 0; i<n; i++) a[i] = c[i];
+    rewriteArr keys
+    rewriteArr vals
+
+    cmp rax, [size256]
+    jl whileH_l_N
+afterWhileH_l_N :
+    ret
