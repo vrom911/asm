@@ -48,6 +48,25 @@
     putStr newline
 %endmacro
 
+%macro printHumanLine 2
+    mov r15, 19
+    mov rax, [%1]
+  divTen%2:
+    cmp rax, 0
+    je end%2
+    mov    rdx, rax
+    shr    rdx, 32
+    mov    ecx, 10
+    div    ecx
+    add dl, '0'
+    mov [lineDec + r15], dl
+    dec r15
+    jmp divTen%2 
+
+  end%2:
+    putStrLen lineDec, 20
+%endmacro
+
 ; Add the word to the array of keys or values
 %macro printTo 1
     mov r11, 0
@@ -141,12 +160,15 @@ section .data
 
 ;; Errors
     var existErr, "File doesn't exist: "
+    var missingKey, "Missing key before the space symbol at line "
+    var missingValue, "Missing value at line "
     var keyNotFoundErr, "Key wasn't found: "
 
     var fileError, "Something went wrong", 0x0
 
 section .bss
   fd_in    resb 8
+  line     resb 8
   size     resb 8
   size256  resb 8
   mid      resb 8
@@ -160,6 +182,7 @@ section .bss
   keyRead  resb 256
   nextWord resb 257
   regval   resb 8
+  lineDec  resb 20
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Main
@@ -197,6 +220,8 @@ playWithFile:
     ret
 
 print_exist:
+    mov r8, 1
+    mov [line], r8
     mov rbx, nextWord
     mov r9,  'k'         ; flag for key or value
     mov r10, 0           ; inc by 256
@@ -213,33 +238,77 @@ readSymb:
     jz closeFile
     jl exit
     mov rcx, [rbx]
+    ; if current symb is ' ' 
     cmp rcx, ' '
-    jz printWord
+    jz space
+    ; if current symb is new line
     cmp rcx, 0xa
-    jz printWord
+    jz newLine
 
+    ; if current symb is any other char
+    cmp r9, 'k'
+    jne valSymb
+    ; key is not empty anymore
+    mov r9, 'l'
+    jmp next
+  valSymb:
+    cmp r9, 'v'
+    jne next
+    ; value is not empty anymore
+    mov r9, 'w'
+    
+  next:
     add rbx, rax
     jmp readSymb
 
-printWord:
+  space:
+    cmp r9, 'l'
+    je putKey
+    putStr missingKey
+    printHumanLine line, keey
+    putStr newline
+    call exit
+  
+  newLine:
+    cmp r9, 'w'
+    je putValue
+    cmp r9, 'k'
+    je emptyLine
+    putStr missingValue
+    printHumanLine line, value
+    putStr newline
+    call exit
+
+
+putValue:
     ; remove space or newline
     mov [rbx], byte 0
-    ; 'k -- write to keys, 'v' -- write to vals
-    cmp r9, 'k'
-    jz printToKeys
-
     ; print the word to values
     mov r9, 'k'
     printTo vals
 
     ; next line
     add r10, 256
+    ; increase line number
+    mov r8, 1
+    add [line], r8
     jmp continuePrintWord
 
-    ; print the word to keys
-printToKeys:
+emptyLine:
+    ; remove space or newline
+    mov [rbx], byte 0
+    ; increase line number
+    mov r8, 1
+    add [line], r8
+    jmp readSymb
+
+putKey:
+    ; remove space or newline
+    mov [rbx], byte 0
+
     mov r9, 'v'
     printTo keys
+    jmp continuePrintWord
 
 continuePrintWord:
     ; remove the nextWord for the next one
