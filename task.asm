@@ -177,8 +177,10 @@ section .bss
   halfseqs resb 8
   keys     resb 128000 ; 256 * 500
   vals     resb 128000
+  nums     resb 128000
   keysSort resb 128000 ; 256 * 500
   valsSort resb 128000
+  numsSort resb 128000
   keyRead  resb 256
   nextWord resb 257
   regval   resb 8
@@ -197,6 +199,8 @@ _start:
     putStrLen keysSort, 128000
     putStr newline
     putStrLen valsSort, 128000
+    putStr newline
+    putStrLen numsSort, 128000
     putStr newline
 
     call search_section
@@ -287,6 +291,10 @@ putValue:
     mov r9, 'k'
     printTo vals
 
+    ; put line number into array
+    mov r8, [line]
+    mov [nums + r10], r8
+
     ; next line
     add r10, 256
     ; increase line number
@@ -351,6 +359,7 @@ sorting:
 ; for (int i = 0; i < n; i++) c[i] = a[i];
     fillSortArr keys
     fillSortArr vals
+    fillSortArr nums
 
     ; int h = 1; 
     ; rax == h
@@ -419,14 +428,26 @@ whileH_l_N:
             ; else { c[k] = a[j]; j++; k++; } 
             cmpKeys r13, r14
             jl keyI_l_J
+            je numI_l_J
+            keyI_g_J:
                 writeTo keys, r14, r15, keysI_g_J
                 writeTo vals, r14, r15, valsI_g_J
+                writeTo nums, r14, r15, numsI_g_J
                 add r14, 256
             jmp incK
             keyI_l_J:
                 writeTo keys, r13, r15, keysI_l_J
                 writeTo vals, r13, r15, valsI_l_J
+                writeTo nums, r13, r15, numsI_l_J
                 add r13, 256
+            jmp incK
+            numI_l_J:
+                mov r8, [nums + r13]
+                mov r9, [nums + r14]
+                cmp r8, r9
+                jl keyI_l_J
+                jmp keyI_g_J
+
             incK:
                 add r15, 256
             jmp whileComplicated
@@ -443,6 +464,7 @@ whileH_l_N:
 
                 writeTo keys, r13, r15, keysI_l_STEP
                 writeTo vals, r13, r15, valsI_l_STEP
+                writeTo nums, r13, r15, numsI_l_STEP
 
                 add r13, 256
                 add r15, 256
@@ -462,6 +484,7 @@ whileH_l_N:
 
                 writeTo keys, r14, r15, keysSecond
                 writeTo vals, r14, r15, valsSecond
+                writeTo nums, r14, r15, numsSecond
 
                 add r14, 256
                 add r15, 256
@@ -485,6 +508,7 @@ whileH_l_N:
     ; for (i = 0; i<n; i++) a[i] = c[i];
     rewriteArr keys
     rewriteArr vals
+    rewriteArr nums
 
     mov rax, [h]
     jmp whileH_l_N
@@ -528,9 +552,9 @@ search_section:
     imul rax, 256
     mov [mid], rax
     
-    ; if keys[m] < key
+    ; if keys[m] <= key
     cmpKeyOn mid
-    jl less
+    jle less
     ; r = m
     mov r9, [mid]
     mov [halfseqs], r9
@@ -543,9 +567,9 @@ search_section:
 
 afterSearch:
     putStr newline
-    cmpKeyOn halfseqs
+    cmpKeyOn seqs
     jne keyNotFound
-    mov r14, [halfseqs]
+    mov r14, [seqs]
     printValue r14
     putStr newline
     ret
