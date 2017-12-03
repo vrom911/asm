@@ -5,7 +5,7 @@
 ; Implements the write system call
 %macro putStr 1
     mov     rax, 1      ; system call number (sys_write)
-    mov     rdi, 1      ; file descriptor (stdout
+    mov     rdi, 1      ; file descriptor (stdout)
     mov     rsi, %1     ; message to write
     mov     rdx, %1Len  ; message length
     syscall             ; call write syscall
@@ -14,10 +14,26 @@
 ; Implements the write system call with given length
 %macro putStrLen 2
     mov     rax, 1      ; system call number (sys_write)
-    mov     rdi, 1      ; file descriptor (stdout
+    mov     rdi, 1      ; file descriptor (stdout)
     mov     rsi, %1     ; message to write
     mov     rdx, %2     ; message length
     syscall             ; call write syscall
+%endmacro
+
+%macro printValue 1
+    mov r8, 0
+ nextWordVal:
+    mov bl, [valsSort + %1 + r8]
+    mov [nextWord + r8], bl
+    add r8, 1
+    cmp r8, 256
+    jl nextWordVal
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, nextWord
+    mov rdx, 256
+    syscall
 %endmacro
 
 ; Implements variable initialization along with its length
@@ -91,6 +107,21 @@
   endLoopCmp%1%2:
 %endmacro
 
+; Compare the input key with the one at index %1
+%macro cmpKeyOn 1
+    mov r8, 0
+    mov r10, [%1]
+  loopCmpOn%1:
+    mov bl, byte [keysSort + r10 + r8]
+    mov dl, byte [keyRead + r8]
+    cmp bl, dl
+    jne endLoopCmpOn%1
+    inc r8
+    cmp r8, 256
+    jl loopCmpOn%1
+  endLoopCmpOn%1:
+%endmacro
+
 %macro divide 2
     mov    rdx, rax
     shr    rdx, 32
@@ -106,9 +137,11 @@
 section .data
     var filename, "input.txt", 0x0
     var newline, 0xa
+    var enterMsg, "Enter the key: ", 0x0
 
 ;; Errors
     var existErr, "File doesn't exist: "
+    var keyNotFoundErr, "Key wasn't found: "
 
     var fileError, "Something went wrong", 0x0
 
@@ -124,6 +157,7 @@ section .bss
   vals     resb 128000
   keysSort resb 128000 ; 256 * 500
   valsSort resb 128000
+  keyRead  resb 256
   nextWord resb 257
   regval   resb 8
 
@@ -141,6 +175,8 @@ _start:
     putStr newline
     putStrLen valsSort, 128000
     putStr newline
+
+    call search_section
     call exit
 
 playWithFile:
@@ -385,3 +421,71 @@ whileH_l_N:
     jmp whileH_l_N
 afterWhileH_l_N :
     ret
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Binary Search
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+search_section:
+    putStr enterMsg
+    ; read the key from the console
+    ; and put it in keyRead
+    mov    rax, 0        ; system call number (read)
+    mov    rdi, 0        ; from stdin
+    mov    rsi, keyRead  ; buffer
+    mov    rdx, 256      ; length
+    syscall
+    
+
+    ; left  == seqs
+    ; right == halfseqs
+    mov r8, -256
+    mov [seqs], r8       ; left
+    mov rax, [size256]
+    mov [halfseqs], rax  ; right
+
+ binarySearch:
+    ; while (l < r - 1)
+    mov rax, [halfseqs]
+    sub rax, 256
+    cmp [seqs], rax
+    jge afterSearch
+
+    ; m = (l + r) / 2
+    mov r8, [seqs]
+    mov rax, [halfseqs]
+    add rax, r8
+    divide mid, 500
+    mov rax, [mid]
+    imul rax, 256
+    mov [mid], rax
+    
+    ; if keys[m] < key
+    cmpKeyOn mid
+    jl less
+    ; r = m
+    mov r9, [mid]
+    mov [halfseqs], r9
+    jmp binarySearch
+  less:
+    ; l = m
+    mov r10, [mid]
+    mov [seqs], r10
+    jmp binarySearch
+
+afterSearch:
+    putStr newline
+    cmpKeyOn halfseqs
+    jne keyNotFound
+    mov r14, [halfseqs]
+    printValue r14
+    putStr newline
+    ret
+
+  keyNotFound:
+    putStr keyNotFoundErr
+    putStrLen keyRead, 256
+    putStr newline
+    ret
+    
+
+
