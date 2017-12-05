@@ -20,10 +20,55 @@
     syscall             ; call write syscall
 %endmacro
 
+; Opens the file with proper error handling
+%macro openFile 2
+    ; open input.txt file
+    mov    rax, 2     ; system call number (open file)
+    mov    rdi, %1    ; file name
+    mov    rsi, 0
+    mov    rdx, 0     ; file access read-only
+    syscall
+    mov    [fd_in], rax
+    ; if managed to open file
+    cmp    rax, 0
+    jge    if_exist_%2
+    ; if doesn't exist print the error
+    cmp    rax, -2
+    jz     if_not_exist_%2
+    ; some other error while opening
+    putStr fileError
+    ret
+
+  if_not_exist_%2:
+    putStr existErr
+    putStr %1
+    putStr newline
+    call   exit
+  if_exist_%2:
+%endmacro
+
+%macro mmap 2
+    mov rdx, [%2]
+    mov rax, 9    ; syscall mmap
+    mov rdi, 0    ; addr
+    mov rsi, rdx  ; len
+    mov rdx, 3    ; prot PROT_READ | PROT_WRITE
+    mov r10, 0x22 ; flags MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1    ; fd (anonymous memory)
+    mov r9, 0     ; off
+    syscall
+
+    mov [%1], rax
+%endmacro
+
 %macro printValue 1
     mov r8, 0
+    mov rdx, [valsSort]
+    add rdx, %1
  nextWordVal:
-    mov bl, [valsSort + %1 + r8]
+    mov rsi, rdx
+    add rsi, r8
+    mov bl, [rsi]
     mov [nextWord + r8], bl
     add r8, 1
     cmp r8, 256
@@ -34,6 +79,17 @@
     mov rsi, nextWord
     mov rdx, 256
     syscall
+%endmacro
+
+; Prints the array
+%macro putArr 2
+    mov r9, [%1]
+    mov     rax, 1      ; system call number (sys_write)
+    mov     rdi, 1      ; file descriptor (stdout)
+    mov     rsi, r9     ; message to write
+    mov     r10, [%2]
+    mov     rdx, r10    ; message length
+    syscall             ; call write syscall
 %endmacro
 
 ; Implements variable initialization along with its length
@@ -68,11 +124,15 @@
 %endmacro
 
 ; Add the word to the array of keys or values
-%macro printTo 1
+%macro putInto 1
+    mov r12, [%1]
+    add r12, r10
     mov r11, 0
   loop%1:
     mov bl, byte [nextWord + r11]
-    mov [%1 + r10 + r11], bl
+    mov r13, r11
+    add r13, r12
+    mov [r13], bl
     add r11, 1
     cmp r11, 256
     jl loop%1
@@ -82,9 +142,19 @@
 ; `writeTo keys 1 2` will put keys[1] into keysSort[2]
 %macro writeTo 4
     mov r8, 0
+    mov rdx, [%1]
+    mov rax, [%1Sort]
   loopwrite%1%2%3%4:
-    mov bl, byte [%1 + %2 + r8]
-    mov [%1Sort + %3 + r8], bl
+    mov rsi, rdx
+    add rsi, %2
+    add rsi, r8
+    mov bl, byte [rsi]
+
+    mov rsi, rax
+    add rsi, %3
+    add rsi, r8
+    mov [rsi], bl
+
     add r8, 1
     cmp r8, 256
     jl loopwrite%1%2%3%4
@@ -92,10 +162,16 @@
 
 ; Rewrite original with the xSort array
 %macro rewriteArr 1
+    mov rdx, [%1]
+    mov rax, [%1Sort]
     mov r8, 0
   looprewrite%1:
-    mov rbx, [%1Sort + r8]
-    mov [%1 + r8], rbx
+    mov rsi, rax
+    add rsi, r8
+    mov rbx, [rsi]
+    mov rsi, rdx
+    add rsi, r8
+    mov [rsi], rbx
     add r8, 8
     cmp r8, [size256]
     jl looprewrite%1
@@ -103,10 +179,16 @@
 
 ; Fill the sort array
 %macro fillSortArr 1
+    mov r9, [%1]
+    mov r11, [%1Sort]
     mov r8, 0
   loopfill%1:
-    mov rbx, [%1 + r8]
-    mov [%1Sort + r8], rbx
+    mov r10, r9
+    add r10, r8
+    mov rbx, [r10]
+    mov r10, r11
+    add r10, r8
+    mov [r10], rbx
     add r8, 8
     cmp r8, [size256]
     jl loopfill%1
@@ -115,9 +197,16 @@
 ; Compare two elements of array at index i and j return the result at r8
 %macro cmpKeys 2
     mov r8, 0
+    mov rdx, [keys]
   loopCmp%1%2:
-    mov bl, byte [keys + %1 + r8]
-    mov dl, byte [keys + %2 + r8]
+    mov rsi, rdx
+    add rsi, r8
+    add rsi, %1
+    mov bl, byte [rsi]
+    mov rsi, rdx
+    add rsi, r8
+    add rsi, %2
+    mov dl, byte [rsi]
     cmp bl, dl
     jne endLoopCmp%1%2
     inc r8
@@ -130,8 +219,12 @@
 %macro cmpKeyOn 1
     mov r8, 0
     mov r10, [%1]
+    mov r11, [keysSort]
+    add r11, r10
   loopCmpOn%1:
-    mov bl, byte [keysSort + r10 + r8]
+    mov r10, r11
+    add r10, r8
+    mov bl, byte [r10]
     mov dl, byte [keyRead + r8]
     cmp bl, dl
     jne endLoopCmpOn%1
@@ -175,12 +268,12 @@ section .bss
   h        resb 8
   seqs     resb 8
   halfseqs resb 8
-  keys     resb 128000 ; 256 * 500
-  vals     resb 128000
-  nums     resb 128000
-  keysSort resb 128000 ; 256 * 500
-  valsSort resb 128000
-  numsSort resb 128000
+  keys     resb 8
+  vals     resb 8
+  nums     resb 8
+  keysSort resb 8
+  valsSort resb 8
+  numsSort resb 8
   keyRead  resb 256
   nextWord resb 257
   regval   resb 8
@@ -194,43 +287,104 @@ section .text
     global _start
 
 _start:
+    call getLineNums
     call playWithFile
     call sorting
-    putStrLen keysSort, 128000
+    putArr keysSort, size256
     putStr newline
-    putStrLen valsSort, 128000
+    putArr valsSort, size256
     putStr newline
-    putStrLen numsSort, 128000
+    putArr numsSort, size256
     putStr newline
 
     call search_section
     call exit
 
-playWithFile:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Get non-empty lines number
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+getLineNums:
     ; open input.txt file
-    mov    rax, 2           ; system call number (open file)
-    mov    rdi, filename    ; file name
-    mov    rdx, 0           ; file access read-only
+    openFile filename, first
+
+
+    mov rbx, nextWord
+    mov r9,  'e'         ; flag for empty line
+    mov r10, 0           ; inc by 256
+  readSymbFirst:
+    ;read from file
+    mov rax, 0
+    mov rdi, [fd_in]
+    mov rsi, rbx
+    mov rdx, 1
     syscall
-    mov    [fd_in], rax
-    ; if managed to open file
-    cmp    rax, 0
-    jge    print_exist
-    ; if doesn't exist print the error
-    cmp    rax, -2
-    jz     print_not_exist
-    ; some other error while opening
-    putStr fileError
+
+    cmp rax, 0
+    jz closeFileFirst
+    jl exit
+
+    mov rcx, [rbx]
+    ; if current symb is new line
+    cmp rcx, 0xa
+    jz newLineFirst
+
+    ; if any other char
+    mov r9, 'n'
+    add rbx, rax
+    jmp readSymbFirst
+
+  newLineFirst:
+    cmp r9, 'e'
+    je emptyLineFirst
+
+    ; next line
+    add r10, 256
+    
+    mov r9, 'e'
+    jmp readSymbFirst
+
+  emptyLineFirst:
+    jmp readSymbFirst
+
+  closeFileFirst:
+    ; put size of array into size variable
+    mov [size256], r10
+    mov rax, r10
+    divide size, 256 
+
+    ; close the file
+    mov    rax, 3        ; system call number (close file)
+    mov    rdi, [fd_in]  ; file descriptor
     ret
 
-print_exist:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Fill keys values lines arrays
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+playWithFile:
+    ; open input.txt file
+    openFile filename, second
+
+    mmap keys, size256
+    mmap vals, size256
+    mmap nums, size256
+    
+
     mov r8, 1
     mov [line], r8
+    ; remove the nextWord for the next one
+    mov r8, 256
+  loopRefresh:
+    mov [nextWord + r8], byte 0
+    dec r8
+    jnz loopRefresh
     mov rbx, nextWord
     mov r9,  'k'         ; flag for key or value
     mov r10, 0           ; inc by 256
 
 readSymb:
+
     ;read from file
     mov rax, 0
     mov rdi, [fd_in]
@@ -242,7 +396,7 @@ readSymb:
     jz closeFile
     jl exit
     mov rcx, [rbx]
-    ; if current symb is ' ' 
+    ; if current symb is ' '
     cmp rcx, ' '
     jz space
     ; if current symb is new line
@@ -260,7 +414,7 @@ readSymb:
     jne next
     ; value is not empty anymore
     mov r9, 'w'
-    
+
   next:
     add rbx, rax
     jmp readSymb
@@ -289,11 +443,13 @@ putValue:
     mov [rbx], byte 0
     ; print the word to values
     mov r9, 'k'
-    printTo vals
+    putInto vals
 
     ; put line number into array
     mov r8, [line]
-    mov [nums + r10], r8
+    mov rsi, [nums]
+    add rsi, r10
+    mov [rsi], r8
 
     ; next line
     add r10, 256
@@ -312,10 +468,11 @@ emptyLine:
 
 putKey:
     ; remove space or newline
+
     mov [rbx], byte 0
 
     mov r9, 'v'
-    printTo keys
+    putInto keys
     jmp continuePrintWord
 
 continuePrintWord:
@@ -329,21 +486,11 @@ loop:
     jmp readSymb
 
 closeFile:
-    ; put size of array into size variable
-    mov [size256], r10
-    mov rax, r10
-    divide size, 256 
-
     ; close the file
     mov    rax, 3        ; system call number (close file)
     mov    rdi, [fd_in]  ; file descriptor
     ret
 
-print_not_exist:
-    putStr existErr
-    putStr filename
-    putStr newline
-    call   exit
 
 exit:
     mov    rax, 60  ; system call number (sys_write)
@@ -355,11 +502,16 @@ exit:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 sorting:
+    mmap keysSort, size256
+    mmap valsSort, size256
+    mmap numsSort, size256
+
 ; DIRTY HACK
 ; for (int i = 0; i < n; i++) c[i] = a[i];
     fillSortArr keys
     fillSortArr vals
     fillSortArr nums
+
 
     ; int h = 1; 
     ; rax == h
@@ -442,8 +594,14 @@ whileH_l_N:
                 add r13, 256
             jmp incK
             numI_l_J:
-                mov r8, [nums + r13]
-                mov r9, [nums + r14]
+                ; nums[i] < nums[j]
+                mov rdx, [nums]
+                mov rsi, rdx
+                add rsi, r13
+                mov r8, [rsi]
+                mov rsi, rdx
+                add rsi, r14
+                mov r9, [rsi]
                 cmp r8, r9
                 jl keyI_l_J
                 jmp keyI_g_J
