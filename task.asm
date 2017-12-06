@@ -177,7 +177,7 @@
     jl looprewrite%1
 %endmacro
 
-; Fill the sort array
+; Fill the sort array with the normal one
 %macro fillSortArr 1
     mov r9, [%1]
     mov r11, [%1Sort]
@@ -290,13 +290,6 @@ _start:
     call getLineNums
     call playWithFile
     call sorting
-    putArr keysSort, size256
-    putStr newline
-    putArr valsSort, size256
-    putStr newline
-    putArr numsSort, size256
-    putStr newline
-
     call search_section
     call exit
 
@@ -677,15 +670,37 @@ afterWhileH_l_N :
 ;;;; Binary Search
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 search_section:
+    ; refreash keyWord
+    mov r8, 0
+  refreshLoop:
+    mov [keyRead + r8], byte 0
+    add r8, 1
+    cmp r8, 256
+    jl refreshLoop
+
     putStr enterMsg
     ; read the key from the console
     ; and put it in keyRead
-    mov    rax, 0        ; system call number (read)
-    mov    rdi, 0        ; from stdin
-    mov    rsi, keyRead  ; buffer
-    mov    rdx, 256      ; length
+    mov r9, 0
+ readKeySymb:
+    mov    rax, 0      ; system call number (read)
+    mov    rdi, 0      ; from stdin
+    mov    rsi, h      ; buffer
+    mov    rdx, 1      ; length
     syscall
+
+    ; if the symb is newline then stop reading
+
+    mov bl, [h]
+    cmp bl, 0xa
+    je endKeyReading
+    mov [keyRead + r9], bl
+    add r9, 1
+    cmp r9, 256
+    jge endKeyReading
+    jmp readKeySymb
     
+  endKeyReading:
 
     ; left  == seqs
     ; right == halfseqs
@@ -724,19 +739,18 @@ search_section:
     jmp binarySearch
 
 afterSearch:
-    putStr newline
     cmpKeyOn seqs
     jne keyNotFound
     mov r14, [seqs]
     printValue r14
     putStr newline
-    ret
+    jmp search_section
 
   keyNotFound:
     putStr keyNotFoundErr
     putStrLen keyRead, 256
     putStr newline
-    ret
+    jmp search_section
     
 
 
