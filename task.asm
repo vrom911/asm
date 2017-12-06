@@ -369,6 +369,7 @@ playWithFile:
     ; open input.txt file
     openFile filename, second
 
+    ; allocate memory for arrays
     mmap keys, size256
     mmap vals, size256
     mmap nums, size256
@@ -505,6 +506,7 @@ exit:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 sorting:
+    ; allocate memory for sorted arrays
     mmap keysSort, size256
     mmap valsSort, size256
     mmap numsSort, size256
@@ -590,12 +592,15 @@ whileH_l_N:
                 writeTo nums, r14, r15, numsI_g_J
                 add r14, 256
             jmp incK
+
             keyI_l_J:
                 writeTo keys, r13, r15, keysI_l_J
                 writeTo vals, r13, r15, valsI_l_J
                 writeTo nums, r13, r15, numsI_l_J
                 add r13, 256
             jmp incK
+
+            ; this one is to deal with duplicate keys
             numI_l_J:
                 ; nums[i] < nums[j]
                 mov rdx, [nums]
@@ -679,6 +684,7 @@ afterWhileH_l_N :
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Binary Search
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 search_section:
     ; refreash keyWord
     mov r8, 0
@@ -688,7 +694,9 @@ search_section:
     cmp r8, 256
     jl refreshLoop
 
+    ; print enter message
     putStr enterMsg
+
     ; read the key from the console
     ; and put it in keyRead
     mov r9, 0
@@ -700,10 +708,10 @@ search_section:
     syscall
 
     ; if the symb is newline then stop reading
-
     mov bl, [h]
     cmp bl, 0xa
     je endKeyReading
+
     mov [keyRead + r9], bl
     add r9, 1
     cmp r9, 256
@@ -711,7 +719,6 @@ search_section:
     jmp readKeySymb
     
   endKeyReading:
-
     ; left  == seqs
     ; right == halfseqs
     mov r8, -256
@@ -719,6 +726,7 @@ search_section:
     mov rax, [size256]
     mov [halfseqs], rax  ; right
 
+ ; search algorithm itself
  binarySearch:
     ; while (l < r - 1)
     mov rax, [halfseqs]
@@ -754,6 +762,7 @@ afterSearch:
     mov r14, [seqs]
     printValue r14
     putStr newline
+    ; new query
     jmp search_section
 
   keyNotFound:
@@ -761,6 +770,5 @@ afterSearch:
     putStrLen keyRead, 256
     putStr newline
     jmp search_section
-    
 
 
