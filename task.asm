@@ -253,6 +253,7 @@ section .data
 
 ;; Errors
     var existErr, "File doesn't exist: "
+    var emptyErr, "The file is empty"
     var missingKey, "Missing key before the space symbol at line "
     var missingValue, "Missing value at line "
     var keyNotFoundErr, "Key wasn't found: "
@@ -341,14 +342,23 @@ getLineNums:
     jmp readSymbFirst
 
   closeFileFirst:
+
     ; put size of array into size variable
     mov [size256], r10
     mov rax, r10
-    divide size, 256 
+    divide size, 256
 
     ; close the file
     mov    rax, 3        ; system call number (close file)
     mov    rdi, [fd_in]  ; file descriptor
+
+    ; if empty file then print error
+    cmp r10, 0
+    jne fileOk
+    putStr emptyErr
+    putStr newline
+    call exit
+  fileOk:
     ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
