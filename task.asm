@@ -117,7 +117,7 @@
     add dl, '0'
     mov [lineDec + r15], dl
     dec r15
-    jmp divTen%2 
+    jmp divTen%2
 
   end%2:
     putStrLen lineDec, 20
@@ -334,7 +334,7 @@ getLineNums:
 
     ; next line
     add r10, 256
-    
+
     mov r9, 'e'
     jmp readSymbFirst
 
@@ -373,7 +373,7 @@ playWithFile:
     mmap keys, size256
     mmap vals, size256
     mmap nums, size256
-    
+
 
     mov r8, 1
     mov [line], r8
@@ -430,7 +430,7 @@ readSymb:
     printHumanLine line, keey
     putStr newline
     call exit
-  
+
   newLine:
     cmp r9, 'w'
     je putValue
@@ -518,11 +518,11 @@ sorting:
     fillSortArr nums
 
 
-    ; int h = 1; 
+    ; int h = 1;
     ; rax == h
     mov  rax, 256
     mov  [h], rax
-    
+
 ; while (h < n)
 whileH_l_N:
     cmp rax, [size256]
@@ -539,7 +539,7 @@ whileH_l_N:
   half:
     ; int halfOfSequences = numberOfSequences / 2;
     mov rax, [seqs]
-    divide halfseqs, 2 
+    divide halfseqs, 2
     ; int mid = halfOfSequences * h
     mov rax, [halfseqs]
     mov r9, [h]
@@ -580,9 +580,9 @@ whileH_l_N:
             add rbx, r12
             cmp r14, rbx
             jge afterWhileComplicated
-            ; if (a[i] < a[j])  
+            ; if (a[i] < a[j])
             ; { c[k] = a[i]; i++; k++; }
-            ; else { c[k] = a[j]; j++; k++; } 
+            ; else { c[k] = a[j]; j++; k++; }
             cmpKeys r13, r14
             jl keyI_l_J
             je numI_l_J
@@ -661,7 +661,7 @@ whileH_l_N:
             ; step = step + h;
             mov rax, [h]
             add r12, rax
-         
+
       jmp whileSTEP_le_MID
 
     afterWhileSTEP_le_MID:
@@ -707,6 +707,10 @@ search_section:
     mov    rdx, 1      ; length
     syscall
 
+    cmp rax, 0
+    jne keepGoing
+    call exit
+  keepGoing:
     ; if the symb is newline then stop reading
     mov bl, [h]
     cmp bl, 0xa
@@ -717,7 +721,7 @@ search_section:
     cmp r9, 256
     jge endKeyReading
     jmp readKeySymb
-    
+
   endKeyReading:
     ; left  == seqs
     ; right == halfseqs
@@ -742,7 +746,7 @@ search_section:
     mov rax, [mid]
     imul rax, 256
     mov [mid], rax
-    
+
     ; if keys[m] <= key
     cmpKeyOn mid
     jle less
@@ -770,5 +774,3 @@ afterSearch:
     putStrLen keyRead, 256
     putStr newline
     jmp search_section
-
-
