@@ -4,37 +4,37 @@
 
 ; Implements the write system call
 %macro putStr 1
-    mov     rax, 1      ; system call number (sys_write)
-    mov     rdi, 1      ; file descriptor (stdout)
-    mov     rsi, %1     ; message to write
-    mov     rdx, %1Len  ; message length
+    mov rax, 1      ; system call number (sys_write)
+    mov rdi, 1      ; file descriptor (stdout)
+    mov rsi, %1     ; message to write
+    mov rdx, %1Len  ; message length
     syscall             ; call write syscall
 %endmacro
 
 ; Implements the write system call with given length
 %macro putStrLen 2
-    mov     rax, 1      ; system call number (sys_write)
-    mov     rdi, 1      ; file descriptor (stdout)
-    mov     rsi, %1     ; message to write
-    mov     rdx, %2     ; message length
-    syscall             ; call write syscall
+    mov rax, 1      ; system call number (sys_write)
+    mov rdi, 1      ; file descriptor (stdout)
+    mov rsi, %1     ; message to write
+    mov rdx, %2     ; message length
+    syscall         ; call write syscall
 %endmacro
 
 ; Opens the file with proper error handling
 %macro openFile 2
     ; open input.txt file
-    mov    rax, 2     ; system call number (open file)
-    mov    rdi, %1    ; file name
-    mov    rsi, 0
-    mov    rdx, 0     ; file access read-only
+    mov rax, 2      ; system call number (open file)
+    mov rdi, %1     ; file name
+    mov rsi, 0
+    mov rdx, 0      ; file access read-only
     syscall
-    mov    [fd_in], rax
+    mov [fd_in], rax
     ; if managed to open file
-    cmp    rax, 0
-    jge    if_exist_%2
+    cmp rax, 0
+    jge if_exist_%2
     ; if doesn't exist print the error
-    cmp    rax, -2
-    jz     if_not_exist_%2
+    cmp rax, -2
+    jz  if_not_exist_%2
     ; some other error while opening
     putStr fileError
     ret
@@ -84,11 +84,11 @@
 ; Prints the array
 %macro putArr 2
     mov r9, [%1]
-    mov     rax, 1      ; system call number (sys_write)
-    mov     rdi, 1      ; file descriptor (stdout)
-    mov     rsi, r9     ; message to write
-    mov     r10, [%2]
-    mov     rdx, r10    ; message length
+    mov rax, 1      ; system call number (sys_write)
+    mov rdi, 1      ; file descriptor (stdout)
+    mov rsi, r9     ; message to write
+    mov r10, [%2]
+    mov rdx, r10    ; message length
     syscall             ; call write syscall
 %endmacro
 
@@ -110,10 +110,10 @@
   divTen%2:
     cmp rax, 0
     je end%2
-    mov    rdx, rax
-    shr    rdx, 32
-    mov    ecx, 10
-    div    ecx
+    mov rdx, rax
+    shr rdx, 32
+    mov ecx, 10
+    div ecx
     add dl, '0'
     mov [lineDec + r15], dl
     dec r15
@@ -235,11 +235,11 @@
 %endmacro
 
 %macro divide 2
-    mov    rdx, rax
-    shr    rdx, 32
-    mov    ecx, %2
-    div    ecx
-    mov    [%1], rax
+    mov rdx, rax
+    shr rdx, 32
+    mov ecx, %2
+    div ecx
+    mov [%1], rax
 %endmacro
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -349,8 +349,8 @@ getLineNums:
     divide size, 256
 
     ; close the file
-    mov    rax, 3        ; system call number (close file)
-    mov    rdi, [fd_in]  ; file descriptor
+    mov rax, 3        ; system call number (close file)
+    mov rdi, [fd_in]  ; file descriptor
 
     ; if empty file then print error
     cmp r10, 0
@@ -490,15 +490,23 @@ loop:
     jmp readSymb
 
 closeFile:
+
+    ; check if non empty line
+    mov r14, [size]
+    mov r15, [line]
+    sub r15, r14
+    cmp r15, 3
+    jg exit
+
     ; close the file
-    mov    rax, 3        ; system call number (close file)
-    mov    rdi, [fd_in]  ; file descriptor
+    mov rax, 3        ; system call number (close file)
+    mov rdi, [fd_in]  ; file descriptor
     ret
 
 
 exit:
-    mov    rax, 60  ; system call number (sys_write)
-    mov    rdi, 0   ; exit code
+    mov rax, 60  ; system call number (sys_write)
+    mov rdi, 0   ; exit code
     syscall
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -520,8 +528,8 @@ sorting:
 
     ; int h = 1;
     ; rax == h
-    mov  rax, 256
-    mov  [h], rax
+    mov rax, 256
+    mov [h], rax
 
 ; while (h < n)
 whileH_l_N:
@@ -701,10 +709,10 @@ search_section:
     ; and put it in keyRead
     mov r9, 0
  readKeySymb:
-    mov    rax, 0      ; system call number (read)
-    mov    rdi, 0      ; from stdin
-    mov    rsi, h      ; buffer
-    mov    rdx, 1      ; length
+    mov rax, 0  ; system call number (read)
+    mov rdi, 0  ; from stdin
+    mov rsi, h  ; buffer
+    mov rdx, 1  ; length
     syscall
 
     cmp rax, 0
